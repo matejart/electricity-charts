@@ -6,3 +6,5 @@ dist
 venv
 .eggs
 .pythonrc
+report.pdf
+local_config.py
