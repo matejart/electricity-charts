@@ -1,8 +1,12 @@
+#coding: utf-8
 import argparse
+from datetime import datetime, timedelta
 
 import openpyxl
+from scipy import interpolate
 
 import config
+from pdf import Pdf
 
 """
 Main module that implements the command-line interface.
@@ -24,7 +28,9 @@ def _parse_arguments():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--input", "-i", help="Path to input xlsx")
-    parser.add_argument("--output", "-o", help="Path to output pdf")
+    parser.add_argument("--output", "-o",
+        default="report.pdf",
+        help="Path to output pdf")
     parser.add_argument("--debug", "-d",
         action="store_const", const=True,
         help="Enable debug outputs")
@@ -67,7 +73,78 @@ def remove_seams(date_col, data_col):
 
     return timeseries
 
-def create_report(wb):
+def date_to_string(date):
+    return date.strftime("%d. %m. %Y")
+
+def interpolate_month_starts(vt_data, mt_data):
+    """
+    Returns the interpolated values of the accummulated
+    metered data in kWh on each day 1 of each month.
+    vt_data and mt_data are both lists of (date, value) tuples.
+    The return value is a list of (date, vt, mt) tuples ordered ascended
+    by date.
+    """
+
+    date_start = vt_data[0][0]
+    date_end = vt_data[-1][0]
+
+    new_dates = []
+    di = date_start
+    if di.day > 1:
+        # start with the first day of the next week
+        di += timedelta(days=32 - di.day)
+        di = datetime(di.year, di.month, 1)
+
+    while di <= date_end:
+        new_dates.append(di)
+        di += timedelta(days=31)
+        di = datetime(di.year, di.month, 1)
+
+    debug("Interpolating from {} to {}".format(di, date_end))
+    new_data = []
+    for dataset in [vt_data, mt_data]:
+        x = [ d[0].timestamp() for d in dataset ]
+        y = [ d[1] for d in dataset ]
+        f = interpolate.interp1d(x, y)
+
+        new_x = [ d.timestamp() for d in new_dates ]
+        new_y = f(new_x)
+        new_data.append(new_y)
+        debug("Interpolation result:\n{}".format(new_y))
+
+    return list(zip(new_dates, new_data[0], new_data[1]))
+
+def get_energy_diff(data):
+    """
+    Compute the differences between data points in the
+    time series of tuples (date, vt, mt). The result is
+    a list of (date, vt_delta, mt_delta) with vt_delta
+    and mt_delta being the amount of energy at date since
+    the preceding date point.
+    """
+
+    diff_data = [ [ d[0] for d in data[1:] ] ]
+    for c in range(1, 3):
+        diff = [ b[c] - a[c] for a, b in zip(data[:-1], data[1:]) ]
+        diff_data.append(diff)
+
+    return list(zip(diff_data[0], diff_data[1], diff_data[2]))
+
+def last_12_entries_table(pdf, title, data_list):
+    rows = [
+        ("Datum", "visoka tarifa", "nizka tarifa")
+    ]
+    sizes = 60, 50, 50
+
+    for d, vt, mt in data_list[-12:]:
+        debug("row: {}, {}, {}".format(d, vt, mt))
+        rows.append(
+            (date_to_string(d), vt, mt))
+
+    pdf.add_paragraph("Zadnjih 12 meritev:")
+    pdf.add_table(rows, sizes)
+
+def create_report(wb, pdf):
     sheet = wb[config.DEFAULT_SHEET_NAME]
     date_col = sheet[config.DATE_COLUMN]
 
@@ -78,6 +155,7 @@ def create_report(wb):
         mt_col = sheet[dataset['MT column']]
 
         vt_seamless = remove_seams(date_col, vt_col)
+        mt_seamless = remove_seams(date_col, mt_col)
 
         debug("{0} - {1}: vt {2}, mt {3}".format(
             title,
@@ -85,7 +163,18 @@ def create_report(wb):
             vt_col[config.DATA_START_ROW].value,
             mt_col[config.DATA_START_ROW].value))
 
+        data_months = interpolate_month_starts(vt_seamless, mt_seamless)
+        data_monthly_energy = get_energy_diff(data_months)
 
+        pdf.add_paragraph(title)
+        last_12_entries_table(pdf, title, data_monthly_energy)
+
+def set_header(pdf):
+    header_lines = [
+        config.PDF_HEADER_TITLE,
+        "izdelano {}".format(date_to_string(datetime.today()))
+    ]
+    pdf.set_header(header_lines)
 
 def main():
     args = _parse_arguments()
@@ -94,8 +183,12 @@ def main():
         config.DEBUG = True
 
     wb = openpyxl.load_workbook(args.input)
+    pdf = Pdf(args.output)
 
-    create_report(wb)
+    set_header(pdf)
+    create_report(wb, pdf)
+
+    pdf.save()
 
 if __name__ == '__main__':
     main()
