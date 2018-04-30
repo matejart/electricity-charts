@@ -162,7 +162,7 @@ def last_12_entries_line_chart(pdf, title, data_list):
     labels = []
     values = [ [], [], [] ]
     for date, vt, mt in sub_data:
-        labels.append(month_to_string(date))
+        labels.append(month_to_string(date - timedelta(days=1)))
         values[0].append(vt)
         values[1].append(mt)
         values[2].append(vt + mt)
@@ -170,9 +170,43 @@ def last_12_entries_line_chart(pdf, title, data_list):
 
     pdf.add_line_chart(170, 120, labels, values, series, minv=0)
 
+def last_12_entries_diffs(pdf, data_a, data_b):
+    sub_data_a = data_a[-12:]
+    sub_data_b = data_b[-12:]
+
+    rows = [
+        ("Datum meritve", "razlika VT [kWh]",
+            "razlika MT [kWh]", "razlika skupno [kWh]")
+    ]
+    sizes = 30, 35, 35, 35
+
+    series = list(rows[0][1:])
+    labels = []
+    values = [ [], [], [] ]
+
+    for (d_a, vt_a, mt_a), (d_b, vt_b, mt_b) in zip(sub_data_a, sub_data_b):
+        vt_diff = vt_b - vt_a
+        mt_diff = mt_b - mt_a
+        sum_diff = (vt_b + mt_b) - (vt_a + mt_a)
+        rows.append(
+            (date_to_string(d_a),
+                pretty_float(vt_diff),
+                pretty_float(mt_diff),
+                pretty_float(sum_diff)))
+
+        labels.append(month_to_string(d_a - timedelta(days=1)))
+        values[0].append(vt_diff)
+        values[1].append(mt_diff)
+        values[2].append(sum_diff)
+
+    pdf.add_table(rows, sizes)
+    pdf.add_line_chart(170, 120, labels, values, series, minv=0)
+
 def create_report(wb, pdf):
     sheet = wb[config.DEFAULT_SHEET_NAME]
     date_col = sheet[config.DATE_COLUMN]
+
+    all_data_monthly_energy = []
 
     for dataset in config.DATASETS:
         title = dataset['title']
@@ -191,11 +225,17 @@ def create_report(wb, pdf):
 
         data_months = interpolate_month_starts(vt_seamless, mt_seamless)
         data_monthly_energy = get_energy_diff(data_months)
+        all_data_monthly_energy.append(data_monthly_energy)
 
         pdf.add_paragraph(title)
         last_12_entries_table(pdf, title, data_monthly_energy)
         last_12_entries_line_chart(pdf, title, data_monthly_energy)
         pdf.new_page()
+
+    pdf.add_paragraph("Razlike med B in A")
+    data_a = all_data_monthly_energy[0]
+    data_b = all_data_monthly_energy[1]
+    last_12_entries_diffs(pdf, data_a, data_b)
 
 def set_header(pdf):
     header_lines = [
