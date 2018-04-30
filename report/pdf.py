@@ -5,7 +5,7 @@ from reportlab.lib.units import mm
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 from reportlab.graphics.charts.legends import Legend
-from reportlab.lib.colors import black
+from reportlab.lib import colors
 
 """
 This module generates the PDF report.
@@ -17,6 +17,23 @@ class Pdf(object):
     )
 
     def __init__(self, filename):
+        self.chart_colors = [
+                colors.HexColor("#0000e5"),
+                colors.HexColor("#cc0000"),
+                colors.HexColor("#00e500"),
+                colors.HexColor("#cccc00"),
+                colors.HexColor("#ff00ff"),
+                colors.HexColor("#5757f0"),
+                colors.HexColor("#8f8ff5"),
+                colors.HexColor("#1f1feb"),
+                colors.HexColor("#c7c7fa"),
+                colors.HexColor("#f5c2c2"),
+                colors.HexColor("#eb8585"),
+                colors.HexColor("#e04747"),
+                colors.HexColor("#d60a0a"),
+                colors.HexColor("#ff0000"),
+                ]
+
         frame = platypus.Frame(
             20 * mm,  20 * mm,  170 * mm, 239 * mm, showBoundary=0,
             topPadding=0, bottomPadding=0, leftPadding=0, rightPadding=0
@@ -62,6 +79,8 @@ class Pdf(object):
         return _min, _max
 
     def add_line_chart(self, width, height, labels, data, series_names, minv=None, maxv=None):
+        n_series = len(data)
+
         pad = 10
 
         _min, _max = self._find_min_max(data)
@@ -82,18 +101,19 @@ class Pdf(object):
         lc.joinedLines = 1
         lc.categoryAxis.labels.boxAnchor = "n"
         lc.lines.strokeWidth = 2
+        for i in range(n_series):
+            lc.lines[i].strokeColor = self.chart_colors[i]
 
-        n = len(data)
         legend = Legend()
         legend.x = lc.width - 20 * mm
-        legend.y = ( 5 + 11*n ) * mm
+        legend.y = ( 5 + 11*n_series ) * mm
         legend.dx = 8
         legend.dy = 8
         legend.fontSize = 9
         legend.boxAnchor = 'nw'
         legend.columnMaximum = 10
         legend.strokeWidth = 1
-        legend.strokeColor = black
+        legend.strokeColor = colors.black
         legend.deltax = 75
         legend.deltay = 10
         legend.autoXPadding = 5
@@ -101,8 +121,8 @@ class Pdf(object):
         legend.dxTextSpace = 5
         legend.alignment = 'right'
         legend.subCols.rpad = 30
-        legend.colorNamePairs = [(lc.lines[i].strokeColor,
-            series_names[i]) for i in xrange(n)]
+        legend.colorNamePairs = list(zip(self.chart_colors[:n_series],
+            series_names))
 
         drawing = Drawing(width * mm, height * mm)
         drawing.hAlign = "CENTER"

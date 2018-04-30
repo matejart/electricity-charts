@@ -140,33 +140,41 @@ def get_energy_diff(data):
 def last_12_entries_table(pdf, title, data_list):
     rows = [
         ("Datum meritve", "visoka tarifa [kWh]", "nizka tarifa [kWh]",
-            "skupaj [kWh]")
+            "skupaj [kWh]", "glede na lani [kWh]")
     ]
-    sizes = 30, 35, 35, 35
+    sizes = 30, 35, 35, 35, 35
 
-    for d, vt, mt in data_list[-12:]:
-        debug("row: {}, {}, {}".format(d, vt, mt))
+    # data from this year
+    sub_data = data_list[-12:]
+    # data from previous year
+    sub_data_ly = data_list[-24:-12]
+
+    for (d, vt, mt), (date_ly, vt_ly, mt_ly) in zip(sub_data, sub_data_ly):
         rows.append(
             (date_to_string(d),
                 pretty_float(vt),
                 pretty_float(mt),
-                pretty_float(vt + mt)))
+                pretty_float(vt + mt),
+                pretty_float((vt + mt) - (vt_ly + mt_ly))))
 
     pdf.add_paragraph("Zadnjih 12 meritev:")
     pdf.add_table(rows, sizes)
 
 def last_12_entries_line_chart(pdf, title, data_list):
+    # data from this year
     sub_data = data_list[-12:]
+    # data from previous year
+    sub_data_ly = data_list[-24:-12]
 
-    series = ["poraba VT", "poraba MT", "poraba skupaj"]
+    series = ["poraba VT", "poraba MT", "poraba skupaj", "poraba lani"]
     labels = []
-    values = [ [], [], [] ]
-    for date, vt, mt in sub_data:
+    values = [ [], [], [], [] ]
+    for (date, vt, mt), (date_ly, vt_ly, mt_ly) in zip(sub_data, sub_data_ly):
         labels.append(month_to_string(date - timedelta(days=1)))
         values[0].append(vt)
         values[1].append(mt)
         values[2].append(vt + mt)
-
+        values[3].append(vt_ly + mt_ly)
 
     pdf.add_line_chart(170, 120, labels, values, series, minv=0)
 
@@ -200,7 +208,7 @@ def last_12_entries_diffs(pdf, data_a, data_b):
         values[2].append(sum_diff)
 
     pdf.add_table(rows, sizes)
-    pdf.add_line_chart(170, 120, labels, values, series, minv=0)
+    pdf.add_line_chart(170, 120, labels, values, series)
 
 def create_report(wb, pdf):
     sheet = wb[config.DEFAULT_SHEET_NAME]
