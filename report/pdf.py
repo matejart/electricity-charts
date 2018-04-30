@@ -4,6 +4,8 @@ from reportlab.lib.units import mm
 
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
+from reportlab.graphics.charts.legends import Legend
+from reportlab.lib.colors import black
 
 """
 This module generates the PDF report.
@@ -16,7 +18,7 @@ class Pdf(object):
 
     def __init__(self, filename):
         frame = platypus.Frame(
-            20 * mm,  20 * mm,  170 * mm, 227 * mm, showBoundary=0,
+            20 * mm,  20 * mm,  170 * mm, 239 * mm, showBoundary=0,
             topPadding=0, bottomPadding=0, leftPadding=0, rightPadding=0
         )
         page = platypus.PageTemplate("main", frames=[frame],
@@ -36,7 +38,7 @@ class Pdf(object):
 
     def add_paragraph(self, text):
         self.story.append(platypus.Paragraph(text, self.PARAGRAPH_STYLE))
-        
+
     def add_table(self, rows, column_sizes, style=[]):
         real_style = platypus.TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.8, (0, 0, 0)),
@@ -48,6 +50,68 @@ class Pdf(object):
             platypus.Table(rows, colWidths=sizes, style=real_style),
             platypus.Spacer(1, 3 * mm),
         ])
+
+    @staticmethod
+    def _find_min_max(data):
+        _min, _max = data[0][0], data[0][0]
+        for d in data:
+            tmp_min = min(d)
+            tmp_max = max(d)
+            _min = _min if _min < tmp_min else tmp_min
+            _max = _max if _max > tmp_max else tmp_max
+        return _min, _max
+
+    def add_line_chart(self, width, height, labels, data, series_names, minv=None, maxv=None):
+        pad = 10
+
+        _min, _max = self._find_min_max(data)
+        minv = _min if minv is None else minv
+        maxv = _max if maxv is None else maxv
+
+        lc = HorizontalLineChart()
+        lc.x = pad * mm
+        lc.y = pad * mm
+        lc.width = (width - 2 * pad) * mm
+        lc.height = (height - 2 * pad) * mm
+
+        lc.categoryAxis.categoryNames = labels
+        lc.data = data
+        lc.valueAxis.valueMin = minv
+        lc.valueAxis.valueMax = maxv
+
+        lc.joinedLines = 1
+        lc.categoryAxis.labels.boxAnchor = "n"
+        lc.lines.strokeWidth = 2
+
+        n = len(data)
+        legend = Legend()
+        legend.x = lc.width - 20 * mm
+        legend.y = ( 5 + 11*n ) * mm
+        legend.dx = 8
+        legend.dy = 8
+        legend.fontSize = 9
+        legend.boxAnchor = 'nw'
+        legend.columnMaximum = 10
+        legend.strokeWidth = 1
+        legend.strokeColor = black
+        legend.deltax = 75
+        legend.deltay = 10
+        legend.autoXPadding = 5
+        legend.yGap = 0
+        legend.dxTextSpace = 5
+        legend.alignment = 'right'
+        legend.subCols.rpad = 30
+        legend.colorNamePairs = [(lc.lines[i].strokeColor,
+            series_names[i]) for i in xrange(n)]
+
+        drawing = Drawing(width * mm, height * mm)
+        drawing.hAlign = "CENTER"
+        drawing.add(lc)
+        drawing.add(legend)
+        self.story.append(drawing)
+
+    def new_page(self):
+        self.story.append(platypus.PageBreak())
 
     def save(self):
         assert self.header is not None, \

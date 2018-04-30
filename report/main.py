@@ -76,6 +76,13 @@ def remove_seams(date_col, data_col):
 def date_to_string(date):
     return date.strftime("%d. %m. %Y")
 
+def month_to_string(date):
+    return date.strftime("%m.%Y")
+
+def pretty_float(value):
+    return "{:,.2f}".format(value).replace(",", " ").replace(
+        ".", ",")
+
 def interpolate_month_starts(vt_data, mt_data):
     """
     Returns the interpolated values of the accummulated
@@ -132,17 +139,36 @@ def get_energy_diff(data):
 
 def last_12_entries_table(pdf, title, data_list):
     rows = [
-        ("Datum", "visoka tarifa", "nizka tarifa")
+        ("Datum meritve", "visoka tarifa [kWh]", "nizka tarifa [kWh]",
+            "skupaj [kWh]")
     ]
-    sizes = 60, 50, 50
+    sizes = 30, 35, 35, 35
 
     for d, vt, mt in data_list[-12:]:
         debug("row: {}, {}, {}".format(d, vt, mt))
         rows.append(
-            (date_to_string(d), vt, mt))
+            (date_to_string(d),
+                pretty_float(vt),
+                pretty_float(mt),
+                pretty_float(vt + mt)))
 
     pdf.add_paragraph("Zadnjih 12 meritev:")
     pdf.add_table(rows, sizes)
+
+def last_12_entries_line_chart(pdf, title, data_list):
+    sub_data = data_list[-12:]
+
+    series = ["poraba VT", "poraba MT", "poraba skupaj"]
+    labels = []
+    values = [ [], [], [] ]
+    for date, vt, mt in sub_data:
+        labels.append(month_to_string(date))
+        values[0].append(vt)
+        values[1].append(mt)
+        values[2].append(vt + mt)
+
+
+    pdf.add_line_chart(170, 120, labels, values, series, minv=0)
 
 def create_report(wb, pdf):
     sheet = wb[config.DEFAULT_SHEET_NAME]
@@ -168,6 +194,8 @@ def create_report(wb, pdf):
 
         pdf.add_paragraph(title)
         last_12_entries_table(pdf, title, data_monthly_energy)
+        last_12_entries_line_chart(pdf, title, data_monthly_energy)
+        pdf.new_page()
 
 def set_header(pdf):
     header_lines = [
