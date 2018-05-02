@@ -94,6 +94,11 @@ class Pdf(object):
         lc.height = (height - 2 * pad) * mm
 
         lc.categoryAxis.categoryNames = labels
+        if len(labels) > 15:
+            # reduce the crowd
+            lc.categoryAxis.labels.angle = 90
+            lc.categoryAxis.labels.dx = -2 * mm
+            lc.categoryAxis.labels.dy = -7 * mm
         lc.data = data
         lc.valueAxis.valueMin = minv
         lc.valueAxis.valueMax = maxv
