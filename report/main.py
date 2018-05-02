@@ -218,10 +218,80 @@ def last_12_entries_diffs(pdf, data_a, data_b):
     pdf.add_table(rows, sizes)
     pdf.add_line_chart(170, 120, labels, values, series)
 
+def get_monthly_average(data_monthly, step, snap=True):
+    """
+    Gets a monthly everage across several months.
+    step: number of months to take into an average
+    snap: True to snap the start date to the first month
+       in the year that is divisible by step, False to just
+       start wherever data_monthly starts
+    """
+    # note that data point for first in a given month
+    # is actually the value of the month before, so
+    # Q1 of 2018 is diff. from 1.Jan.2018 to 1.Apr.2018,
+    # Q2 of 2018 is from 1.Apr.2018 to 1.July 2018, etc.
+    if snap:
+        date0 = data_monthly[0][0]
+        start_i = (step - (date0.month - 1) % step) % step
+    else:
+        start_i = 0
+
+    debug("Monthly average starting from {}: {}".format(start_i,
+        data_monthly[start_i][0]))
+    for d, vt, mt in data_monthly:
+        debug("{}\t{}\t{}".format(date_to_string(d), vt, mt))
+
+    data_pairs = zip(data_monthly[start_i::step],
+        data_monthly[start_i + step::step])
+    data_avgs = [
+        (date_b, (vt_b - vt_a)/step, (mt_b - mt_a)/step)
+            for (date_a, vt_a, mt_a), (date_b, vt_b, mt_b)
+                in data_pairs
+        ]
+
+    return data_avgs
+
+def quarterly_data(pdf, data_a, data_b):
+    data_quarterly_a = get_monthly_average(data_a, 3)
+    data_quarterly_b = get_monthly_average(data_b, 3)
+
+    rows = [
+        ("Četrtletje", "povpr. VT (A) [kWh]",
+            "povpr. MT (A) [kWh]", "povpr. VT (B) [kWh]",
+            "povpr. MT (B) [kWh]")
+    ]
+    sizes = 30, 35, 35, 35, 35
+
+    series = list(rows[0][1:])
+    labels = []
+    values = [ [], [], [], [] ]
+
+    for (d_a, vt_a, mt_a), (d_b, vt_b, mt_b) in zip(data_quarterly_a, data_quarterly_b):
+        date_mid_q = d_a - timedelta(days=45) # somewhere 1.5 months back
+        quarter = "Q{0} {1}".format(int((date_mid_q.month + 1)/3),
+            date_mid_q.year)
+        rows.append(
+            (quarter,
+                pretty_float(vt_a),
+                pretty_float(mt_a),
+                pretty_float(vt_b),
+                pretty_float(mt_b)))
+
+        labels.append(quarter)
+        values[0].append(vt_a)
+        values[1].append(mt_a)
+        values[2].append(vt_b)
+        values[3].append(mt_b)
+
+    pdf.add_table(rows, sizes)
+    pdf.add_line_chart(170, 120, labels, values, series, minv=0)
+
+
 def create_report(wb, pdf):
     sheet = wb[config.DEFAULT_SHEET_NAME]
     date_col = sheet[config.DATE_COLUMN]
 
+    all_data_energy = []
     all_data_monthly_energy = []
 
     for dataset in config.DATASETS:
@@ -240,6 +310,7 @@ def create_report(wb, pdf):
             mt_col[config.DATA_START_ROW].value))
 
         data_months = interpolate_month_starts(vt_seamless, mt_seamless)
+        all_data_energy.append(data_months)
         data_monthly_energy = get_energy_diff(data_months)
         all_data_monthly_energy.append(data_monthly_energy)
 
@@ -252,6 +323,10 @@ def create_report(wb, pdf):
     data_a = all_data_monthly_energy[0]
     data_b = all_data_monthly_energy[1]
     last_12_entries_diffs(pdf, data_a, data_b)
+
+    pdf.new_page()
+    pdf.add_paragraph("Poraba po četrtletjih")
+    quarterly_data(pdf, all_data_energy[0], all_data_energy[1])
 
 def set_header(pdf):
     header_lines = [
