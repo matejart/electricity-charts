@@ -56,7 +56,15 @@ def remove_seams(date_col, data_col):
         data_col[config.DATA_START_ROW + 1:])
 
     for d, e1, e2 in loop_zip:
-        if e1.value is None or e2.value is None:
+
+        # skipping gaps: gaps come when the other side's
+        # counter is replaced and there will be two subsequent
+        # entries with the same date and None for data. We
+        # save the e1.value wherever its available and use
+        # it wherever e2.value is available
+        if e1.value is not None:
+            e1v = e1.value
+        if e2.value is None:
             continue
 
         d_prev = timeseries[-1][0]
@@ -65,10 +73,10 @@ def remove_seams(date_col, data_col):
         if d_prev == d.value:
             continue
 
-        row_diff = e2.value - e1.value
+        row_diff = e2.value - e1v
         row_val = val_prev + row_diff
         debug("  {0}: {1} -> {2} ({3}): {4}".format(
-            d.value, e1.value, e2.value, row_diff, row_val))
+            d.value, e1v, e2.value, row_diff, row_val))
         timeseries.append((d.value, row_val))
 
     return timeseries
